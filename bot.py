@@ -1,137 +1,133 @@
 import os
-import time
 import random
+import time
 import requests
 from datetime import datetime
 import pytz
 
-# ==============================
-# CONFIGURACIÓN (Render)
-# ==============================
+# ================= CONFIGURACIÓN =================
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
-if not TELEGRAM_TOKEN or not CHAT_ID:
-    raise ValueError("Faltan variables de entorno TELEGRAM_TOKEN o CHAT_ID")
-
-API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-
 ZONA_COLOMBIA = pytz.timezone("America/Bogota")
 
-# ==============================
-# DATOS SIMULADOS VIP (EJEMPLO)
-# ==============================
-ANALISIS_VIP = [
+BOT_NAME = "ANÁLISIS VIP – FÚTBOL"
+
+# ================= DATOS SIMULADOS / ESTADÍSTICOS =================
+PARTIDOS = [
     {
-        "par": "EUR/USD",
-        "direccion": "🟢 ARRIBA (BUY)",
-        "probabilidad": 78,
-        "fundamento": (
-            "Alta frecuencia de presión compradora en los primeros minutos, "
-            "ruptura reciente de micro-resistencia y patrón de continuidad alcista."
-        )
+        "liga": "Premier League",
+        "partido": "Manchester United vs Newcastle",
+        "hora": "03:00 PM"
     },
     {
-        "par": "EUR/USD",
-        "direccion": "🔴 ABAJO (SELL)",
-        "probabilidad": 74,
-        "fundamento": (
-            "Rechazo fuerte en zona de liquidez superior, "
-            "debilidad en el impulso y velas de agotamiento."
-        )
+        "liga": "LaLiga",
+        "partido": "Barcelona vs Real Sociedad",
+        "hora": "04:00 PM"
+    },
+    {
+        "liga": "Eliminatorias Mundial 2026",
+        "partido": "Colombia vs Uruguay",
+        "hora": "07:00 PM"
+    },
+    {
+        "liga": "Mundial 2026 – Proyección",
+        "partido": "Brasil vs Alemania",
+        "hora": "08:00 PM"
     }
 ]
 
-# ==============================
-# FUNCIONES TELEGRAM
-# ==============================
-def enviar_mensaje(texto, botones=None):
-    payload = {
+MERCADOS = [
+    {
+        "nombre": "Más de 2.5 goles",
+        "fundamento": "Promedios goleadores elevados, presión ofensiva sostenida y antecedentes recientes con marcadores amplios."
+    },
+    {
+        "nombre": "Gol en primer tiempo",
+        "fundamento": "Alta frecuencia de anotaciones tempranas y ritmo ofensivo desde el inicio."
+    },
+    {
+        "nombre": "Ambos equipos anotan",
+        "fundamento": "Defensas vulnerables y registros consistentes de gol por ambas escuadras."
+    },
+    {
+        "nombre": "Gana o empata el favorito",
+        "fundamento": "Superioridad estadística, mayor posesión promedio y mejor rendimiento reciente."
+    }
+]
+
+# ================= FUNCIONES TELEGRAM =================
+def enviar_mensaje(texto, boton=True):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+    data = {
         "chat_id": CHAT_ID,
         "text": texto,
-        "parse_mode": "Markdown"
+        "parse_mode": "HTML"
     }
 
-    if botones:
-        payload["reply_markup"] = {
-            "keyboard": botones,
+    if boton:
+        data["reply_markup"] = {
+            "keyboard": [[{"text": "📊 Pedir análisis VIP"}]],
             "resize_keyboard": True
         }
 
-    requests.post(f"{API_URL}/sendMessage", json=payload)
+    requests.post(url, json=data)
 
-
-def obtener_updates(offset=None):
-    params = {"timeout": 30}
-    if offset:
-        params["offset"] = offset
-    r = requests.get(f"{API_URL}/getUpdates", params=params)
-    return r.json()
-
-
-# ==============================
-# MENSAJES
-# ==============================
-def mensaje_inicio():
-    return (
-        "🤖 *BOT DE ANÁLISIS VIP*\n\n"
-        "Pulsa el botón para recibir un análisis exclusivo basado en "
-        "probabilidad estadística.\n\n"
-        "_Análisis informativo. No constituye recomendación de inversión._"
-    )
-
-
+# ================= ANÁLISIS VIP =================
 def generar_analisis_vip():
-    dato = random.choice(ANALISIS_VIP)
+    partido = random.choice(PARTIDOS)
+    mercado = random.choice(MERCADOS)
+    probabilidad = random.randint(68, 79)
+
     ahora = datetime.now(ZONA_COLOMBIA).strftime("%d/%m/%Y %I:%M %p")
 
-    return (
-        "💎 *ANÁLISIS VIP*\n\n"
-        f"📊 *Par:* {dato['par']}\n"
-        f"⏰ *Hora (Colombia):* {ahora}\n"
-        f"📈 *Señal:* {dato['direccion']}\n"
-        f"🎯 *Probabilidad estimada:* {dato['probabilidad']}%\n\n"
-        "📌 *Fundamentación:*\n"
-        f"{dato['fundamento']}\n\n"
-        "_Análisis estadístico informativo. "
-        "No constituye recomendación de apuesta._"
-    )
+    mensaje = f"""
+💎 <b>{BOT_NAME}</b>
 
+🏆 <b>Liga:</b> {partido['liga']}
+⏰ <b>Hora (Colombia):</b> {partido['hora']}
+⚽ <b>Partido:</b> {partido['partido']}
 
-# ==============================
-# BOT PRINCIPAL
-# ==============================
-def iniciar_bot():
-    print("🤖 Bot VIP iniciado correctamente")
-    enviar_mensaje(
-        mensaje_inicio(),
-        botones=[["📊 Pedir análisis VIP"]]
-    )
+🎯 <b>Pronóstico con mayor probabilidad:</b>
+👉 {mercado['nombre']}
 
-    offset = None
+📈 <b>Probabilidad estimada:</b> {probabilidad}%
+
+📌 <b>Fundamentación:</b>
+{mercado['fundamento']}
+
+🗓 <i>Generado:</i> {ahora}
+    """
+
+    return mensaje
+
+# ================= LOOP PRINCIPAL =================
+def escuchar_bot():
+    enviar_mensaje("🤖 Bot VIP activo.\nPulsa el botón para recibir un análisis exclusivo.")
+
+    last_update_id = None
 
     while True:
-        updates = obtener_updates(offset)
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+        params = {"timeout": 100, "offset": last_update_id}
+        resp = requests.get(url, params=params).json()
 
-        if "result" in updates:
-            for update in updates["result"]:
-                offset = update["update_id"] + 1
+        if "result" in resp:
+            for update in resp["result"]:
+                last_update_id = update["update_id"] + 1
 
                 if "message" in update:
                     texto = update["message"].get("text", "")
 
-                    if texto in ["/start", "📊 Pedir análisis VIP"]:
-                        enviar_mensaje(
-                            generar_analisis_vip(),
-                            botones=[["📊 Pedir análisis VIP"]]
-                        )
+                    if "Pedir análisis VIP" in texto:
+                        analisis = generar_analisis_vip()
+                        enviar_mensaje(analisis)
 
-        time.sleep(1)
+        time.sleep(2)
 
-
-# ==============================
-# EJECUCIÓN
-# ==============================
+# ================= INICIO =================
 if __name__ == "__main__":
-    iniciar_bot()
+    escuchar_bot()
+
 
